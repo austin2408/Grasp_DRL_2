@@ -8,12 +8,12 @@ from tqdm import tqdm, trange
 from ddqn_LWF.agent_new import Agent
 from ddqn_LWF.options import Option
 
-args = Option().create("ddqn/config/offline.yml")
+args = Option().create("ddqn_LWF/config/offline.yml")
 agent = Agent(args)
 
-# run = wandb.init(project="Grasp_drl")
-# config = wandb.config
-# config.update(args)
+run = wandb.init(project="Grasp_drl")
+config = wandb.config
+config.update(args)
 
 # crate folder
 weight_path = os.path.join(args.save_folder, "weight")
@@ -29,10 +29,10 @@ t = trange(args.iteration)
 
 for i in t:
     log = agent.train()
-    # wandb.log(log)
+    wandb.log(log)
     t.set_description("loss:%.3f, S/F:%.1f" %
                       (log['loss mean'], log['Success Sample Rate']))
 
     if (i+1) % args.save_freq == 0:
         torch.save(agent.trainer.behavior_net.state_dict(), os.path.join(
-            weight_path, "behavior_%d_%.2f.pth" % (i+1, log['loss mean'])))
+            weight_path, "behavior_LWF_%d_%.2f.pth" % (i+1, log['loss mean'])))
