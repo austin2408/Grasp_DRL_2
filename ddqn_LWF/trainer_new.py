@@ -40,7 +40,19 @@ class Trainer():
         self.discount_factor = args.discount_factor
 
         # Initialize optimizer
-        self.optimizer = torch.optim.SGD(self.behavior_net.parameters(), lr = args.learning_rate, momentum = 0.9, weight_decay = 2e-5)
+        # self.optimizer = torch.optim.SGD(self.behavior_net.parameters(), lr = args.learning_rate, momentum = 0.9, weight_decay = 2e-5)
+        # self.optimizer_new = torch.optim.Adam(self.behavior_net.value_net_new.parameters(), lr = args.learning_rate, weight_decay = 2e-5)
+
+        self.optimizer = torch.optim.SGD([{'params': self.behavior_net.grasp_net.parameters(), 'lr': args.learning_rate},
+                                          {'params': self.behavior_net.value_net.parameters(), 'lr': args.learning_rate}, 
+                                          ], lr = args.learning_rate, momentum = 0.9, weight_decay = 2e-5)
+
+        self.optimizer_new = torch.optim.Adam(self.behavior_net.value_net_new.parameters(), lr = args.learning_rate, weight_decay = 2e-5)
+
+        # self.optimizer = torch.optim.Adam([{'params': self.behavior_net.grasp_net.parameters(), 'lr': args.learning_rate},
+        #                                   {'params': self.behavior_net.value_net.parameters(), 'lr': args.learning_rate}, 
+        #                                   {'params': self.behavior_net.value_net_new.parameters(), 'lr': 1e-4},
+        #                                   ], lr = args.learning_rate, weight_decay = 2e-5)
 
 
     # Forward pass through image, get Q value
@@ -95,7 +107,7 @@ class Trainer():
 
         future_reward = 0.0
         if not is_empty:
-            future_reward = next_prediction[
+            future_reward = next_prediction[0][
                 0, next_best_pixel[0], next_best_pixel[1]]
         td_target = current_reward + self.discount_factor * future_reward
 
@@ -105,7 +117,6 @@ class Trainer():
 
     # Do backwardpropagation
     def backprop(self, color_img, depth_img, action_pix_idx, label_value, is_weight, batch_size, Qmap_old, first=False, update=False):
-
         label = np.zeros((1, 320, 320))
         label_weight = np.zeros((1, 320, 320))
         # print(action_pix_idx)
@@ -119,11 +130,27 @@ class Trainer():
             label[:, 160, 240] = label_value
             label_weight[:, 160, 240] = 1
 
+        # if action_pix_idx[0] == 80: #upper
+        #     # print('11')
+        #     label[:, 160, 40] = label_value
+        #     label_weight[:, 160, 40]= 1
+        # else: #front
+        #     # print('222')
+        #     label[:, 160, 120] = label_value
+        #     label_weight[:, 160, 120] = 1
+
         if first:
             self.optimizer.zero_grad()
+            self.optimizer_new.zero_grad()
         loss_value = 0.0
         out_str = "TD Target: {:.3f}\n Weight: {:.3f}\n".format(
             label_value, is_weight)
+
+        # =========================== loss V2 ===========================
+        idx = np.where(Qmap_old == np.max(Qmap_old))
+        label_weight_old = np.zeros((1, 320, 320))
+        label_weight_old[0, idx[0][0]+48, idx[1][0]+48] = 1
+        # =========================== loss V2 ===========================
         # Forward pass to save gradient
         '''
             0 -> grasp, -90
@@ -139,13 +166,12 @@ class Trainer():
         out_str += "Q: {:.3f}\n".format(
             prediction[0, 0, action_pix_idx[0], action_pix_idx[1]])
 
-        # norm = np.linalg.norm(Qmap_old)
-        # Qmap_old = Qmap_old/norm
 
          
         if self.args.cuda:
-            # =========================== loss V1 ===========================
+            # =========================== loss V2 ===========================
             loss = self.criterion(self.behavior_net.output_prob.view(1, 320, 320), Variable(torch.from_numpy(Qmap_old).float().cuda())) * \
+                Variable(torch.from_numpy(label_weight_old).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([is_weight])).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float().cuda(), requires_grad=False)
 
@@ -153,9 +179,16 @@ class Trainer():
                 Variable(torch.from_numpy(label_weight).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([is_weight])).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float().cuda(), requires_grad=False)
-            # =========================== loss V1 ===========================
+
+            # loss_ = self.criterion(self.behavior_net.output_prob_new.view(1, 320, 320), Variable(torch.from_numpy(label).float().cuda())) * \
+            #     Variable(torch.from_numpy(label_weight).float().cuda(), requires_grad=False) * \
+            #     Variable(torch.from_numpy(np.array([is_weight])).float().cuda(), requires_grad=False) * \
+            #     Variable(torch.from_numpy(np.array([1./batch_size])).float().cuda(), requires_grad=False)
+
+            # =========================== loss V2 ===========================
         else:
             loss = self.criterion(self.behavior_net.output_prob.view(1, 320, 320), Variable(torch.from_numpy(Qmap_old).float())) * \
+                Variable(torch.from_numpy(label_weight_old).float(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([is_weight])).float(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float(), requires_grad=False)
 
@@ -169,8 +202,9 @@ class Trainer():
         # print(Qmap_old)
         # print(label_value)
         loss = loss.sum()
-        # print(loss)
+        # loss_ = loss_.sum()
         loss.backward()
+        # loss_.backward()
         loss_value = loss.cpu().data.numpy()
         # Grasping is symmetric
         rotation += 4
@@ -180,6 +214,7 @@ class Trainer():
             prediction[0, 0, action_pix_idx[0], action_pix_idx[1]])
         if self.args.cuda:
             loss = self.criterion(self.behavior_net.output_prob.view(1, 320, 320), Variable(torch.from_numpy(Qmap_old).float().cuda())) * \
+                Variable(torch.from_numpy(label_weight_old).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([is_weight])).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float().cuda(), requires_grad=False)
 
@@ -188,9 +223,14 @@ class Trainer():
                 Variable(torch.from_numpy(np.array([is_weight])).float().cuda(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float().cuda(), requires_grad=False)
 
-            
+            # loss_ = self.criterion(self.behavior_net.output_prob_new.view(1, 320, 320), Variable(torch.from_numpy(label).float().cuda())) * \
+            #     Variable(torch.from_numpy(label_weight).float().cuda(), requires_grad=False) * \
+            #     Variable(torch.from_numpy(np.array([is_weight])).float().cuda(), requires_grad=False) * \
+            #     Variable(torch.from_numpy(np.array([1./batch_size])).float().cuda(), requires_grad=False)
+
         else:
             loss = self.criterion(self.behavior_net.output_prob.view(1, 320, 320), Variable(torch.from_numpy(Qmap_old).float())) * \
+                Variable(torch.from_numpy(label_weight_old).float(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([is_weight])).float(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float(), requires_grad=False)
 
@@ -199,7 +239,9 @@ class Trainer():
                 Variable(torch.from_numpy(np.array([is_weight])).float(), requires_grad=False) * \
                 Variable(torch.from_numpy(np.array([1./batch_size])).float(), requires_grad=False)
         loss = loss.sum()
+        # loss_ = loss_.sum()
         loss.backward()
+        # loss_.backward()
         loss_value += loss.cpu().data.numpy()
 
         loss_value = loss_value/2
@@ -210,4 +252,5 @@ class Trainer():
 
         if update:
             self.optimizer.step()
+            self.optimizer_new.step()
         return loss_value
