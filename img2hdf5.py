@@ -10,7 +10,7 @@ import json
 import warnings  
 warnings.filterwarnings("ignore") 
 
-Path = '/home/austin/Test_ws/src/collect/src/Datasets'
+Path = '/home/austin/Test_ws/src/collect/src/Datasets_view'
 ratio = 1
 count = [0,0]
 Filter_0 = 1
@@ -33,9 +33,10 @@ def logger(path, File_name):
     name_list.sort()
     with h5py.File(File_name,'w') as f:
         for name in name_list:
-            print(name)
+            # print(name)
             num = int(name.split('_')[1])
-            if num > 35:
+            if num > 349:
+                continue
                 F = 'failed'
             else:
                 F = 'sucess'
@@ -47,6 +48,8 @@ def logger(path, File_name):
 
             LLL = os.listdir(Path+'/'+name+'/Qmap')
             LLL.sort()
+
+            print(name,F)
 
             # print(L,LL,LLL)
 
@@ -85,14 +88,17 @@ def logger(path, File_name):
             g3 = g1.create_group("next_state")
             g3.create_dataset('color', (224,224,3), data=color_n)
             g3.create_dataset('depth', (224,224), data=depth_n)
-            g3["empty"] = np.array([True])
+            if F == 'failed':
+                g3["empty"] = np.array([False])
+            else:
+                g3["empty"] = np.array([True])
 
     print('Done')
 
 
 
-File_name = '/home/austin/Downloads/HERoS-Dataset/Logger_view.hdf5'
-# logger(Path, File_name)
+File_name = '/home/austin/Downloads/HERoS-Dataset/Logger_view_3.hdf5'
+logger(Path, File_name)
 
 id = 'iter_7'
 # # Check
