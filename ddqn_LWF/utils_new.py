@@ -88,7 +88,7 @@ def plot_figures(tool, color, depth, show=False, save=False, ros=False):
         maxx = np.max(object)
         u, v = best[1][0], best[0][0]
         pos.append([u, v])
-        combine_ = cv2.circle(combine_, (u, v), 3, (0, 0, 0), 2)
+        combine_ = cv2.circle(combine_, (u, v), 5, (0, 0, 0), 2)
         tt_ = color.copy()
         tool_cmap.append(tool_cmap_)
         combine.append(combine_)
@@ -203,9 +203,10 @@ def preprocessing(color, depth):
 
     return input_color_data, input_depth_data, padding_width
 
-def postProcessing(prediction, color, depth, color_tensor, pad, show=False):
+def postProcessing(prediction, prediction_new, color, depth, color_tensor, pad, show=False):
     size = color.shape[0]
     s = color_tensor.shape[2]
+    new = prediction_new[0][0, 0, pad//2:size+pad//2, pad//2:size+pad//2].detach().cpu().numpy()
     tool_0 = prediction[0][0, 0, pad//2:size+pad//2, pad//2:size+pad//2].detach().cpu().numpy() 
     tool_1 = prediction[1][0, 0, pad//2:size+pad//2, pad//2:size+pad//2].detach().cpu().numpy() 
     tool_2 = prediction[2][0, 0, pad//2:size+pad//2, pad//2:size+pad//2].detach().cpu().numpy() 
@@ -214,4 +215,4 @@ def postProcessing(prediction, color, depth, color_tensor, pad, show=False):
     result, value, affordance, max = plot_figures([tool_0, tool_1, tool_2, tool_3], color, depth, show=show, ros=True)
     
     # return result, value, affordance
-    return result, value, affordance, prediction[max].detach().cpu().numpy()
+    return result, value, affordance, prediction[max].detach().cpu().numpy(), new
