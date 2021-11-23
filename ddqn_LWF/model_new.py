@@ -113,7 +113,16 @@ class reinforcement_net_new(nn.Module):
             nn.ReLU(inplace=False),
             nn.Conv2d(3, 1, 1),
         )
+        # ========================= new task =========================
+        # 
         # ========================= new task ========================= 
+        # self.value_net_new = nn.Sequential(
+        #     nn.ReLU(inplace=False),
+        #     nn.Conv2d(3, 3, 1),
+        #     nn.ReLU(inplace=False),
+        #     nn.Conv2d(3, 1, 1),
+        # )
+        # ========================= new task =========================  
 
         self.output_prob = None
         # ========================= new task =========================
